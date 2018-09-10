@@ -1,175 +1,148 @@
-let moment = require("moment");
-let database = require("./database");
+const moment = require("moment");
+const database = require("./database");
+const machines = require("./machine.js").machines;
 
-function createMachinehandler(req, res) {
+async function createMachinehandler(req, res) {
   let machine = req.body;
-  console.log(req.body);
-  database.db.query("INSERT INTO machines SET ?", machine, function (err, rows) {
-    if (err) {
-      res.status(500).json({
-        status_code: 500,
-        status_message: "internal server error"
-      });
+  try {
+    let newMachine = await machines.create(machine);
+    res.status(201).json({
+      status_message: "Successfully created",
+      newMachine
+    });
+  } catch (err) {
+    res.status(500).json({
+      status_code: 500,
+      status_message: "internal server error",
+      err: err.message
+    });
+  }
+}
+
+async function getMachinesHandler(req, res) {
+  try {
+    let page = parseInt(req.query.page, 10);
+    let orderby;
+    let direction;
+    let offset;
+    let limit;
+    const filter = {};
+    if (isNaN(page) || page < 1) {
+      page = 1;
+    }
+    limit = parseInt(req.query.limit, 10);
+    if (isNaN(limit)) {
+      limit = 10;
+    } else if (limit > 50) {
+      limit = 50;
+    } else if (limit < 1) {
+      limit = 1;
+    }
+    offset = (page - 1) * limit;
+
+    if (req.query.orderby) {
+      orderby = req.query.orderby;
     } else {
-      res.send("succesfully created", rows);
+      orderby = `id`;
     }
-  });
-}
-
-function getMachinesHandler(req, res) {
-  let page = parseInt(req.query.page, 10);
-  let sqlquery;
-  if (isNaN(page) || page < 1) {
-    page = 1;
-  }
-  let limit = parseInt(req.query.limit, 10);
-  if (isNaN(limit)) {
-    limit = 10;
-  } else if (limit > 50) {
-    limit = 50;
-  } else if (limit < 1) {
-    limit = 1;
-  }
-  let offset = (page - 1) * limit;
-
-  let orderby;
-  if (req.query.orderby) {
-    orderby = database.db.escapeId(req.query.orderby);
-  } else {
-    orderby = `id`;
-  }
-  let direction;
-  if (req.query.direction) {
-    direction = req.query.direction;
-  } else {
-    direction = "asc";
-  }
-  let sorter = orderby + ' ' + direction;
-  let filter = " ";
-  if (req.query.name) {
-    filter += "AND name=" + (req.query.name);
-  }
-  if (req.query.type) {
-    filter += "AND type=" + (req.query.type);
-  }
-  sqlquery = "SELECT * FROM machines WHERE isdeleted IS  ?  " + filter + " ORDER BY " + sorter + "   LIMIT ? OFFSET ?"
-
-  console.log(sqlquery);
-  database.db.query(
-    sqlquery, [false, limit, offset],
-    function (err, rows, fields) {
-      if (err) {
-        res.status(500).json({
-          status_code: 500,
-          status_message: "internal server error"
-        });
-      } else {
-        if (rows.length) {
-          let machines = [];
-          // Loop check on each row
-          for (let i = 0; i < rows.length; i++) {
-            // Create an object to save current row's data
-            let machine = {
-              id: rows[i].id,
-              name: rows[i].name,
-              type: rows[i].type,
-              description: rows[i].description
-            };
-            machines.push(machine);
-          }
-          console.log(machines);
-          res.status(200).json(machines);
-        } else {
-          res.status(404).end("the resource is not found");
-        }
-      }
-    }
-  );
-}
-
-function getMachineByIdHandler(req, res) {
-
-  let id = req.params.id;
-  database.db.query("SELECT * FROM machines WHERE id =?", id, function (
-    err,
-    rows,
-    fields
-  ) {
-    //using placeholder to protect ourselves from sql inections
-
-    if (err) {
-      res.status(500).json({
-        status_code: 500,
-        status_message: "internal server error"
-      });
+    if (req.query.direction) {
+      direction = req.query.direction;
     } else {
-      // Check if the result is found or not
-      if (rows.length == 1) {
-        // Create the object to save the data.
-        let machine = {
-          name: rows[0].name,
-          type: rows[0].type,
-          description: rows[0].description,
-          id: rows[0].id
-        };
-        // render the details.plug page.
-        res.send(machine);
-      } else {
-        // render not found page
-        console.log(rows);
-        res.status(404).json({
-          status_code: 404,
-          status_message: "Not found"
-        });
-      }
+      direction = "asc";
     }
-  });
-}
-
-function updateMachineHandler(req, res) {
-  // return new Promise(async function (resolve, reject) {
-  let machineId = req.params.id;
-  let newMachineEntry = req.body;
-  newMachineEntry["updated_at"] = moment().format();
-
-  database.db.query(
-    "UPDATE machines SET ? WHERE id=? AND isdeleted IS ?", [newMachineEntry, machineId, false],
-    function (err, result) {
-
-      if (err) {
-        res.status(500).json({
-          status_code: 500,
-          status_message: "internal server error"
-        });
-      }
-      console.log({
-        err,
-        result
+    if (req.query.name) {
+      filter["name"] = req.query.name;
+    }
+    if (req.query.type) {
+      filter["type"] = req.query.type;
+    }
+    if (req.query.description) {
+      filter["description"] = req.query.description;
+    }
+    const result = await machines.findAll({
+      limit: limit,
+      offset: offset,
+      order: [[orderby, direction]],
+      where: filter
+    });
+    if (result) {
+      res.send(result);
+    } else {
+      res.status(404).json({
+        status_message: "resources not found "
       });
-      console.log(result);
-      if (result.affectedRows == 0) {
-        res.send("Not found");
-      } else {
-        res.send(result);
-      }
-    })
+    }
+  } catch (err) {
+    res.status(500).json({
+      status_code: 500,
+      status_message: "internal server error",
+      err: err.message
+    });
+  }
 }
 
-function deleteMachineHandler(req, res) {
-  let id = req.params.id;
+async function getMachineByIdHandler(req, res) {
+  const id = req.params.id;
+  try {
+    const result = await machines.findById(id);
+    if (result) {
+      res.send(result);
+    } else
+      res.status(404).json({
+        status_message: "resources not found "
+      });
+  } catch (err) {
+    res.status(500).json({
+      status_code: 500,
+      status_message: "internal server error",
+      err: err.message
+    });
+  }
+}
+async function updateMachineHandler(req, res) {
+  const machineId = req.params.id;
+  const newMachineEntry = req.body;
 
-  database.db.query(
-    "UPDATE machines SET ? WHERE id=?", [{
-      deleted_at: moment().format(),
-      isdeleted: true
-    }, id],
-    function (err, rows) {
-      if (err) console.log("Error deleting : %s ", err);
-      //rows[0].deletedat=currentDate();
-      console.log("deleted", rows);
-      res.send(rows);
+  try {
+    const updatedRow = await machines.update(newMachineEntry, {
+      where: {
+        id: machineId
+      }
+    });
+    if (updatedRow == 1) {
+      res.status(200).json("record updated succesfuly");
+    } else {
+      res.status(404).json({
+        status_message: "resources not found "
+      });
     }
-  );
+  } catch (err) {
+    res.status(500).json({
+      status_code: 500,
+      status_message: "internal server error",
+      err: err.message
+    });
+  }
+}
+
+async function deleteMachineHandler(req, res) {
+  const id = req.params.id;
+  try {
+    const element = await machines.destroy({ where: { id: id } });
+    if (element == 1) {
+      res.json("record deleted successfully");
+    } else {
+      res.status(404).json({
+        status_message: "resources not found "
+      });
+    }
+  } catch (err) {
+    res.status(500).json({
+      status_code: 500,
+      status_message: "internal server error",
+      err: err.message
+    });
+  }
 }
 
 module.exports = {

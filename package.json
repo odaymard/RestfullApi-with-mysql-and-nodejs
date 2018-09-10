@@ -1,0 +1,26 @@
+{
+  "name": "restfullandsql",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "start":"node app.js ",
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/odaymard/RestfullApi-with-mysql-and-nodejs.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/odaymard/RestfullApi-with-mysql-and-nodejs/issues"
+  },
+  "homepage": "https://github.com/odaymard/RestfullApi-with-mysql-and-nodejs#readme",
+  "dependencies": {
+    "dotenv": "^6.0.0"
+  }
+}
